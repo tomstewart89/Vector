@@ -23,10 +23,6 @@
 
 #define SWAP(type, a, b) type tmp ## a = a; a = b; b = tmp ## a;
 
-// The plain new and delete operators are defined by the arduino core, but not these mass ones,
-void *operator new[](size_t size) { return malloc(size); }
-void operator delete[](void *p) { free(p); }
-
 template <class ParameterType> class Predicate
 {
 public:
