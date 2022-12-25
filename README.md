@@ -1,9 +1,12 @@
+# A simple vector library for Arduino ESP boards
 
-# Vector: A simple muteable array library for arduino. 
 
-This implementation uses an underlying array to store its elements. When that array is filled the vector allocates a block of memory twice as large as its existing array. It then copies all the existing elements into that array and carries on. For that reason elements substituted as VectorType below need to implement a copy constructor and an operator= to facilitate that transfer if they're to be anything other than POD types.
+vector.h is based on [Tom Stewart's work](https://github.com/tomstewart89/Vector) with some differences:
 
-To as greater extent as was practical Vector was designed to behave like a std::vector so for more information: http://www.cplusplus.com/reference/vector/vector/ is a good reference. Otherwise, for basic useage check /examples
 
-NOTE: This library uses heap memory which can be problematic in microcontrollers where RAM is scarce. If memory availability is an issue then use Reserve(n) to allocate whatever is required at the beginning of the program and avoid pushing more than n elements during the program.
+ - syntax is closer to standard C++ vectors
+ - error handling added
+ - internal storage structure is different and also the logic for handling capacity.
 
+
+I have tried supporting vectors similar to standard C++ vectors but not all vector member functions are supported (yet). Error handling needed a different approach since  try {} catch () {} C++ functionality is not supported by Arduino. 
