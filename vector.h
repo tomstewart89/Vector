@@ -30,11 +30,6 @@
   #define __VECTOR_H__
 
 
-  // exception codes
-  #define out_of_range  1
-  #define bad_alloc     2
-  #define length_error  3
-
   template <class vectorType> class vector {
 
     public:
