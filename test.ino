@@ -10,10 +10,6 @@
 
 #include "vector.h"
 
-void displayChar (char *c) { Serial.printf ("%c\n", *c); }
-
-unsigned long sum = 0;
-
 
 void setup () {
   Serial.begin (115200);
@@ -117,6 +113,8 @@ void setup () {
     vector<int> vectE (10000);
     for (int i = 0; i < 10000; i++)
       vectE.push_back (i);
+
+    unsigned long sum = 0;
   
     unsigned long startMillis = millis ();
     for (auto element: vectE)
