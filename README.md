@@ -1,4 +1,4 @@
-# A simple vector library for Arduino ESP boards
+# C++ vectors for Arduino (ESP boards)
 
 
 vector.h is based on [Tom Stewart's work](https://github.com/tomstewart89/Vector) with some differences:
