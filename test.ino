@@ -1,7 +1,7 @@
 /*
  *  Test the syntax supported by vector.h
  *  
- *  This file is part of Simple vector library for Arduino ESP boards: https://github.com/BojanJurca/Vectors-for-Arduino-ESP-boards
+ *  This file is part of Simple vector library for Arduino ESP boards: https://github.com/BojanJurca/Cplusplus-vectors-for-Arduino
  *  
  *  Bojan Jurca, December 25, 2022
  *  
@@ -23,15 +23,15 @@ void setup () {
 
     // vector constructor with brace enclosed initializer list
     vector<String> vectB = { "one", "two", "tree" };
-    // error checking: if there is not enough heap memory created vector is empty: vectB.size () == 0
+    // error checking: if there is not enough heap memory, created vector is empty: vectB.empty() or vectB.size () == 0
     
     // vector constructor with defined increment number of elements to reduce frequent resizes
     vector<char> vectC (10);
-    // error checking: there is no reason why this would not succeed since the vector is not incrementing its sotrage yet
+    // error checking: there is no reason why this would not succeed since the vector is not incrementing its storage just yet
 
     // vector initialized with copy-constructor
     vector<String> vectD = vectB;
-    // error checking: if there is not enough heap memory created vector is empty: vectD.size () == 0
+    // error checking: if there is not enough heap memory, created vector is empty: vectD.empty () or vectD.size () == 0
     
 
   // vector assignment
@@ -39,14 +39,14 @@ void setup () {
 
     // vector assignment with brace enclosed initializer list
     vectD = { "five", "six" };
-    // error checking: if there is not enough heap memory vector is empty: vectD.size () == 0
+    // error checking: if there is not enough heap memory, vector is empty: vectD.empty () or vectD.size () == 0
     vectD = {};
     // error checking: there is no reason why this would not succeed
 
     // vector assignement from another vector
     vectD = vectB;
-    // error checking: if there is not enough heap memory vector is empty: vectD.size () == 0
-    //                 but if vectB is empty too then the assigment is always valid
+    // error checking: if there is not enough heap memory vector is empty: vectD.empty () or vectD.size () == 0
+    //                 but if vectB is empty too then the assigment always succeeds
 
 
   // vector comparison
@@ -63,11 +63,11 @@ void setup () {
     for (int i = 0; i < vectD.size (); i++)
       Serial.println (vectD [i]);
 
-    // with at member function,
+    // with "at" member function
     for (int i = 0; i < vectD.size (); i++)
       Serial.println (vectD.at (i));
 
-    // for each with an iterator
+    // for each, with an iterator
     for (auto element: vectC)
       Serial.println (element); 
 
@@ -79,6 +79,7 @@ void setup () {
     for (int i = 0; i < 10; i++)
       if (vectA.push_back (i) == false)
         ; // <- error handling here
+    // alternativelly you can reserve space for 10 elements in advance (vectA.reserve (10)) and than push_back will succeed (at least for simple vector types)
 
     // push_front - this is not supported by standard C++ vectors
     if (vectA.push_front (-1) == false)

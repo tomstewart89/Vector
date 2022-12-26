@@ -1,7 +1,7 @@
 /*
  * vector.h for Arduino ESP boards
  * 
- * This file is part of Simple vector library for Arduino ESP boards: https://github.com/BojanJurca/Vectors-for-Arduino-ESP-boards
+ * This file is part of Simple vector library for Arduino ESP boards: https://github.com/BojanJurca/Cplusplus-vectors-for-Arduino
  * 
  * vector.h is based on Tom Stewart's work: https://github.com/tomstewart89/Vector
  * with some differences:
@@ -35,7 +35,7 @@
     public:
 
       /*
-       *  Constructor of vector with no elements allows the following kinds of creations of vectors: 
+       *  Constructor of vector with no elements allows the following kinds of creation of vectors: 
        *  
        *    vector<int> A;
        *    vector<int> B (10); // with increment of 10 elements when vector grows, to reduce how many times __elements__ will be resized
@@ -49,7 +49,7 @@
 
 
       /*
-       *  Constructor of vector from brace enclosed initializer list allows the following kinds of creations of vectors: 
+       *  Constructor of vector from brace enclosed initializer list allows the following kinds of creation of vectors: 
        *  
        *     vector<int> D = { 200, 300, 400 };
        *     vector<int> E ( { 500, 600} );
@@ -135,7 +135,7 @@
 
 
       /*
-       *  Copy-constructor of vector allows the following kinds of creations of vectors: 
+       *  Copy-constructor of vector allows the following kinds of creation of vectors: 
        *  
        *     vector<int> F = E;
        *     
