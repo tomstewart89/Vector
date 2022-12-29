@@ -32,7 +32,7 @@ void setup () {
     // vector initialized with copy-constructor
     vector<String> vectD = vectB;
     // error checking: if there is not enough heap memory, created vector is empty: vectD.empty () or vectD.size () == 0
-    
+
 
   // vector assignment
   // -----------------
@@ -52,12 +52,13 @@ void setup () {
   // vector comparison
   // -----------------
 
-  Serial.println ( (vectD == vectB) ? "vectors are equal" : "vectors are different");
+    Serial.println ( (vectD == vectB) ? "vectors are equal" : "vectors are different");
 
-    
+
   // iterating through vector elements
   // ---------------------------------
-  vectC = { 'a', 'b', 'c' };
+
+    vectC = { 'a', 'b', 'c' };
 
     // with [] operator
     for (int i = 0; i < vectD.size (); i++)
@@ -106,6 +107,15 @@ void setup () {
     // error checking: there is no need to check although erase would return false if element doesn't exist
 
 
+  // find an element in the vector
+  // -----------------------------
+
+  vector<String> vectF = {"one", "two", "tree", "four", "five"};
+  Serial.printf ("Element two found on position %i\n", vectF.find ("two"));
+  vectF.pop_front ();
+  Serial.printf ("Element two found on position %i\n", vectF.find ("two"));
+
+
   // performance of vectors 
   // ----------------------
 
@@ -133,40 +143,49 @@ void setup () {
     
     vectE = {};
     vectE.reserve (17);
-    
+   
     startMillis = millis ();
-    for (long i = 0; i <= 1000000; i ++) {
-      vectE.push_back (i);                      // add 1 element to the end
-      if (vectE.size () >= 16) vectE.erase (0); // delete 1 element from the beginning
+    for (long i = 0; i < 1000000; i++) {
+      vectE.push_back (i);                     // add 1 element to the end
+      if (vectE.size () > 16) vectE.erase (0); // delete 1 element from the beginning
     }
     endMillis = millis ();
-    Serial.printf ("Inserting 1.000.000 elements in circular queue implemented with vector took %lu ms\n", endMillis - startMillis); // 1500 ms
+    Serial.println (vectE [0]);
+    Serial.printf ("Inserting 1.000.000 elements in circular queue implemented with vector took %lu ms, circular queue content:\n", endMillis - startMillis); // 461 ms
+    for (byte i = 0; i < vectE.size (); i++)
+      Serial.printf ("   %i\n", vectE [i]);
 
-    startMillis = millis ();
     int queue [16];
-    unsigned char b = 0;
-    unsigned char e = 0;
-    for (long i = 0; i <= 1000000; i ++) {
-      queue [b] = i;
-      b = (b + 1) | 16;
-      if (b == e) e = (e + 1) | 16;
+    char b = 0;
+    char e = -1;
+    startMillis = millis ();
+    for (long i = 0; i < 1000000; i++) {
+      e = (e + 1) & 0b00001111; // 15
+      queue [e] = i;
+      if (e == b) b = (b + 1) & 0b00001111; // 15
     }
     endMillis = millis ();
-    Serial.printf ("Inserting 1.000.000 elements in circular queue implemented with array of integers took %lu ms\n", endMillis - startMillis); // 0 ms
+    Serial.printf ("Inserting 1.000.000 elements in circular queue implemented with array of integers took %lu ms, circular queue content:\n", endMillis - startMillis); // 46 ms
+    byte i = (b - 1) & 0b00001111;
+    do {
+      i = (i + 1) & 0b00001111; // 15 
+      Serial.printf ("   %i\n", queue [i]);
+    } while (i != e);
 
-
+  
   // storage
   // -------
 
-  vector<unsigned long> vectF (100);
+  vector<unsigned long> vectG (100);
   while (true) {
-    if (!vectF.push_back ( 2022 )) {
+    if (!vectG.push_back ( 2022 )) {
       Serial.printf ("Error, not enough memory\n");
       break;
     }
   }
-  Serial.printf ("No more than %i elements can be placed into vector\n", vectF.size ());
+  Serial.printf ("No more than %i elements could be placed into vector\n", vectG.size ());
 }
+
 
 void loop () { 
   
