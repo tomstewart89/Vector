@@ -101,10 +101,17 @@
        *    - requested capacity is less than current vector size
        *    - could not allocate enough memory for requested storage
        */
-       
+      
       bool reserve (int newCapacity) {
         if (newCapacity < __size__) return false; // can't change capacity without loosing some elements
-        if (newCapacity > __size__) return __changeCapacity__ (newCapacity);
+        if (newCapacity > __size__) {
+          if (__changeCapacity__ (newCapacity)) {
+            __reserved__ = newCapacity;
+            return true;
+          } else {
+            return false;
+          }
+        }
         return true; // no change in capacity
       }
 
@@ -117,6 +124,7 @@
 
       // clears all the elements from the vector
       void clear () {
+        __reserved__ = 0;
         if (__elements__ != NULL) __changeCapacity__ (0);
       }
 
@@ -176,8 +184,9 @@
         for (auto e: other)
           this->push_back (e);
 
-        ////for (int i = 0; i < other.size (); i++)
-          ////this->push_back (other [i]);       
+        // or
+        // for (int i = 0; i < other.size (); i++)
+        //   this->push_back (other [i]);       
       }
 
 
@@ -197,8 +206,10 @@
         // copy other's elements - storege will not get resized meanwhile
         for (auto e: other)
           this->push_back (e);
-        ////for (int i = 0; i < other.size (); i++)
-          ///7this->push_back (other [i]);               
+
+        // or    
+        // for (int i = 0; i < other.size (); i++)
+        //   this->push_back (other [i]);               
         return this;
       }
 
@@ -286,7 +297,9 @@
         __size__ --;
 
         // do we have to free the space occupied by deleted element?
-        if (__capacity__ > __size__ + __increment__ - 1) __changeCapacity__ (__size__); // doesn't matter if it does't succeed, the elekent is deleted anyway
+        if (__capacity__ > __size__ + __increment__ - 1) 
+          if (__reserved__ == 0 || __size__ >= __reserved__)
+            __changeCapacity__ (__size__); // doesn't matter if it does't succeed, the elekent is deleted anyway
         return true;
       }
 
@@ -307,7 +320,9 @@
         __size__ --;
 
         // do we have to free the space occupied by deleted element?
-        if (__capacity__ > __size__ + __increment__ - 1) __changeCapacity__ (__size__);  // doesn't matter if it does't succeed, the elekent is deleted anyway
+        if (__capacity__ > __size__ + __increment__ - 1) 
+          if (__reserved__ == 0 || __size__ >= __reserved__)
+            __changeCapacity__ (__size__);  // doesn't matter if it does't succeed, the elekent is deleted anyway
         return true;
       }
 
@@ -454,17 +469,17 @@
       class Iterator {
         public:
           // constructor
-          Iterator (vector* vect, int position) {
+          Iterator (vector *vect, int position) {
             __vector__ = vect;
             __position__ = position;
           }
           
           // * operator
-          vectorType& operator * () const { 
+          vectorType& operator *() const { 
             return *(__vector__->__elements__ + __position__); 
           }
       
-          // ++ (previx) increment
+          // ++ (prefix) increment
           Iterator& operator ++ () { 
             // this is a little tricky - we should allow iterator to go past the last element in a vector
             if (__vector__->__end__ >= __vector__->__beginning__) ++ __position__;
@@ -472,11 +487,11 @@
             return *this; 
           }  
       
-          friend bool operator!= (const Iterator& a, const Iterator& b) { return a.__position__ != b.__position__; };     
+          friend bool operator != (const Iterator& a, const Iterator& b) { return a.__position__ != b.__position__; };     
       
       private:
       
-          vector* __vector__;
+          vector *__vector__;
           int __position__;
       };      
 
@@ -511,8 +526,9 @@
       friend Iterator;
 
       vectorType *__elements__ = NULL;  // initially the vector has no elements, __elements__ buffer is empty
-      int __capacity__ = 0;             // initial number of elements (or not occupied slots) in __elements__
+      int __capacity__ = 0;             // the number of positions (occupied by elements and free ones) in __elements__
       int __increment__ = 1;            // by default, increment elements buffer for one element when needed
+      int __reserved__ = 0;             // reserved capacity (if reserve member function is called)
       int __size__ = 0;                 // initially there are not elements in __elements__
       int __beginning__ = 0;            // points to the first element in __elements__
       int __end__ = -1;                 // points to the last element in __elements__

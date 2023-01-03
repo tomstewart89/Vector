@@ -1,5 +1,5 @@
 /*
- *  Test the syntax supported by vector.h
+ *  Test ) = {};tax supported by vector.h
  *  
  *  This file is part of Simple vector library for Arduino ESP boards: https://github.com/BojanJurca/Cplusplus-vectors-for-Arduino
  *  
@@ -121,27 +121,29 @@ void setup () {
 
     // for_each compared to for each iterator and [] operator
 
-    vector<int> vectE (10000);
-    for (int i = 0; i < 10000; i++)
+    vector<int> vectE (20000);
+    for (int i = 0; i < 20000; i++)
       vectE.push_back (i);
 
     unsigned long sum = 0;
-  
     unsigned long startMillis = millis ();
     for (auto element: vectE)
       sum += element;
     unsigned long endMillis = millis ();
-    Serial.printf ("Looping through %i elements with for each iterator took %lu ms\n", vectE.size (), endMillis - startMillis); // 3 ms
+    Serial.println (sum);
+    Serial.printf ("Looping through %i elements with for each iterator took %lu ms\n", vectE.size (), endMillis - startMillis); // 1 ms
 
+    sum = 0;
     startMillis = millis ();
     for (int i = 0; i < vectE.size (); i++)
       sum += vectE [i];
     endMillis = millis ();
-    Serial.printf ("Looping through %i elements with [] operator took %lu ms\n", vectE.size (), endMillis - startMillis); // 2 ms
+    Serial.println (sum);
+    Serial.printf ("Looping through %i elements with [] operator took %lu ms\n", vectE.size (), endMillis - startMillis); // 1 ms
 
     // circular queue implemented with C++ vector compared to circular queue implemented with C array
     
-    vectE = {};
+    vectE.clear ();
     vectE.reserve (17);
    
     startMillis = millis ();
@@ -150,7 +152,6 @@ void setup () {
       if (vectE.size () > 16) vectE.erase (0); // delete 1 element from the beginning
     }
     endMillis = millis ();
-    Serial.println (vectE [0]);
     Serial.printf ("Inserting 1.000.000 elements in circular queue implemented with vector took %lu ms, circular queue content:\n", endMillis - startMillis); // 461 ms
     for (byte i = 0; i < vectE.size (); i++)
       Serial.printf ("   %i\n", vectE [i]);
@@ -168,7 +169,7 @@ void setup () {
     Serial.printf ("Inserting 1.000.000 elements in circular queue implemented with array of integers took %lu ms, circular queue content:\n", endMillis - startMillis); // 46 ms
     byte i = (b - 1) & 0b00001111;
     do {
-      i = (i + 1) & 0b00001111; // 15 
+      i = (i + 1) & 0b00001111; // 15
       Serial.printf ("   %i\n", queue [i]);
     } while (i != e);
 
@@ -179,11 +180,11 @@ void setup () {
   vector<unsigned long> vectG (100);
   while (true) {
     if (!vectG.push_back ( 2022 )) {
-      Serial.printf ("Error, not enough memory\n");
+      Serial.printf ("Out of memory - no more than %i elements could be placed into vector\n", vectG.size ());
       break;
     }
   }
-  Serial.printf ("No more than %i elements could be placed into vector\n", vectG.size ());
+  
 }
 
 
