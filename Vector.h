@@ -236,6 +236,19 @@ public:
         // Now revise the head and size (tail needn't change) to reflect the new size
         head = size - 1;
     }
+    
+    // Append a vector to an existing one
+    vector<vectorType>* operator += (vector<vectorType> other) {
+        // Reserve new space if needed. It is intended to reduce memmory reallocation.
+        if (this->capacity () < this->size () + other.size ())
+            this->reserve (this->size () + other.size ());
+        
+        // Copy other's elements - storage will not get resized meanwhile.
+        for (auto e: other)
+            this->push_back (e);
+
+        return this;
+    }
 
 private:
 
