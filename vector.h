@@ -18,10 +18,10 @@
  * 
  * vectorType __elements__ :   | | |5|4|3|2|1|0|5|6|7|8|9| | | | | | | |
  *                             |    |<--- __size__ ---->|              |
- *                             | __beginning__        __end__          |
+ *                             | __front__           __back__          |
  *                             |<-------------- __capacity__ --------->|     
  * 
- *  Bojan Jurca, December 25, 2022
+ *  Bojan Jurca, February 28, 2023
  *  
  */
 
@@ -30,568 +30,662 @@
   #define __VECTOR_H__
 
 
-  // uncommnet the following line if you want vectors to throw exceptions, which would cause the restart in case of errors 
-  // since Arduino can not handle the exceptions. Enabling the exceptions may help finding problems the code.
-  // #define __VECTOR_H_EXCEPTIONS__
-
-  #ifdef __VECTOR_H_EXCEPTIONS__
-    // Exceptions that vector can throw. It doesn't really matter what it throws - everithing will cause a reset since Arduino can't catch exceptions.
-    #define out_of_range 1
-    #define bad_alloc 2
-  #endif
+  #define __VECTOR_H_EXCEPTIONS__  // uncomment this line if you want vector to throw exceptions
+  #define __VECTOR_H_DEBUG__       // uncomment this line for debugging puroposes
 
 
   template <class vectorType> class vector {
 
     public:
 
-      /*
-       *  Constructor of vector with no elements allows the following kinds of creation of vectors: 
-       *  
-       *    vector<int> A;
-       *    vector<int> B (10); // with increment of 10 elements when vector grows, to reduce how many times __elements__ will be resized (which is time consuming)
-       *    vector<int> C = { 100 };
-       */
+          /*
+           * Error handling 
+           * 
+           * Some functions will return an error code or OK. 
+           * 
+           * They will aslo set lastErrorCode variable which will hold this value until it is reset (by assigning lastErrorCode = OK)
+           * so it is not necessary to check success of each single operation in the code. 
+           */
+           
+          enum errorCode {OK = 0, 
+                          OUT_OF_RANGE = -1, 
+                          BAD_ALLOC = -2, 
+          }; // note that all errors are negative numbers
+
+          errorCode lastErrorCode = OK;
+
+          void clearLastErrorCode () { lastErrorCode = OK; }
+
+
+          /*
+           *  Constructor of vector with no elements allows the following kinds of creation of vectors: 
+           *  
+           *    vector<int> A;
+           *    vector<int> B (10); // with increment of 10 elements when vector grows, to reduce how many times __elements__ will be resized (which is time consuming)
+           *    vector<int> C = { 100 };
+           */
+           
+          vector (int16_t increment = 1) { __increment__ = increment < 1 ? 1 : increment; }
+    
+    
+          /*
+           *  Constructor of vector from brace enclosed initializer list allows the following kinds of creation of vectors: 
+           *  
+           *     vector<int> D = { 200, 300, 400 };
+           *     vector<int> E ( { 500, 600} );
+           */
+    
+          vector (std::initializer_list<vectorType> il) {
+              clear (); // clear existing elements if needed
+              if (reserve (il.size ()) != OK) {
+                  #ifdef __VECTOR_H_DEBUG__
+                      Serial.printf ("Error %i: vector constructor from brace enclosed initializer list: out of memory\n", (int) lastErrorCode);
+                  #endif
+                
+                  return;
+              }
+
+              for (auto i: il)
+                  push_back (i);
+          }
+    
+          
+          /*
+           * Vector destructor - free the memory occupied by vector elements
+           */
+           
+          ~vector () { if (__elements__ != NULL) delete [] __elements__; }
+
+
+          /*
+           * Returns number of elements in vector.
+           */
+
+          int16_t size () { return __size__; }
+
+
+          /*
+           * Returns current storage capacity = the number of elements that can fit into the vector without needing to resize the storage.
+           * 
+           */
+
+          int16_t capacity () { return __capacity__; }
+
+
+          /*
+           *  Changes storage capacity.
+           *  
+           *  Returns OK if succeeds and errorCode in case of error:
+           *    - requested capacity is less than current vector size
+           *    - could not allocate enough memory for requested storage
+           */
        
-      vector (int increment = 1) {
-        if (increment < 1) increment = 1;
-        __increment__ = increment;
-      }
+          errorCode reserve (int16_t newCapacity) {
+              if (newCapacity < __size__) {
+
+                  #ifdef __VECTOR_H_DEBUG__
+                      Serial.printf ("Error %i: vector.reserve: can't change capacity without loosing some elements\n", (int) BAD_ALLOC);
+                  #endif
+                  #ifdef __VECTOR_H_EXCEPTIONS__
+                      throw BAD_ALLOC;
+                  #endif                      
+
+                  return lastErrorCode = BAD_ALLOC;
+              }
+              if (newCapacity > __size__) {
+                  errorCode e = __changeCapacity__ (newCapacity);
+                  if (e < OK) {
+                      #ifdef __VECTOR_H_DEBUG__
+                          Serial.printf ("Error %i: vector.reserve: out of memory\n", (int) BAD_ALLOC);
+                      #endif
+                                            
+                      return lastErrorCode = e;
+                  }
+              }
+              return OK; // no change in capacity is needed
+          }
 
 
-      /*
-       *  Constructor of vector from brace enclosed initializer list allows the following kinds of creation of vectors: 
-       *  
-       *     vector<int> D = { 200, 300, 400 };
-       *     vector<int> E ( { 500, 600} );
-       */
+          /*
+           * Checks if vector is empty.
+           */
 
-      vector (std::initializer_list<vectorType> il) {
-        if (!reserve (il.size ())) return;
-        for (auto i: il)
-          push_back (i);
-      }
-
-      
-      // destructor
-      ~vector () {
-        if (__elements__ != NULL) delete [] __elements__;
-      }
+          bool empty () { return __size__ == 0; }
 
 
-      // returns number of elements in vector
-      int size () {
-        return __size__;
-      }
+          /*
+           * Clears all the elements from the vector.
+           */
+
+          void clear () { if (__elements__ != NULL) __changeCapacity__ (0); } // there is no reason why __changeCapacity__ would fail here
 
 
-      /*
-       *  Returns current storage capacity = the number of elements that can fit into the vector without needing to resize the storage
-       */
+          /*
+           *  [] operator enables elements of vector to be addressed by their positions (indexes) like:
+           *  
+           *    for (int i = 0; i < E.size (); i++)
+           *      Serial.printf ("E [%i] = %i\n", i, E [i]);    
+           *    
+           *    or
+           *    
+           *     E [0] = E [1];
+           *     
+           *  If the index is not a valid index, the result is unpredictable
+           */
+    
+          vectorType &operator [] (int16_t position) {
+              if (position < 0 || position >= __size__) {
+                  lastErrorCode = OUT_OF_RANGE;
 
-      int capacity () {
-        return __capacity__;
-      }
+                  #ifdef __VECTOR_H_DEBUG__
+                      Serial.printf ("Error %i: vector [] operator\n", (int) OUT_OF_RANGE);
+                  #endif
+                  #ifdef __VECTOR_H_EXCEPTIONS__
+                      throw OUT_OF_RANGE;
+                  #endif                      
+              }
+              
+              return __elements__ [(__front__ + position) % __capacity__];
+          }
+
+  
+          /*
+           *  Same as [] operator, so it is not really needed but added here because it is supported in standard C++ vectors
+           */      
+
+          vectorType &at (int16_t position) {
+              if (position < 0 || position >= __size__) {
+                  lastErrorCode = OUT_OF_RANGE;
+
+                  #ifdef __VECTOR_H_DEBUG__
+                      Serial.printf ("Error %i: vector.at\n", (int) OUT_OF_RANGE);
+                  #endif                  
+                  #ifdef __VECTOR_H_EXCEPTIONS__
+                      throw OUT_OF_RANGE;
+                  #endif                      
+              }
+        
+              return __elements__ [(__front__ + position) % __capacity__];
+          }
 
 
-      /*
-       *  Request a change in storage capacity
-       *  
-       *  Returns true if succeeds and false in case of error:
-       *    - requested capacity is less than current vector size
-       *    - could not allocate enough memory for requested storage
-       */
-      
-      bool reserve (int newCapacity) {
-        if (newCapacity < __size__) return false; // can't change capacity without loosing some elements
-        if (newCapacity > __size__) {
-          if (__changeCapacity__ (newCapacity)) {
-            __reserved__ = newCapacity;
+          /*
+           *  Copy-constructor of vector allows the following kinds of creation of vectors: 
+           *  
+           *     vector<int> F = E;
+           *     
+           *  Without properly handling it, = operator would probably just copy one instance over another which would result in crash when instances will be distroyed.
+           *  
+           *  Calling program should check lastErrorCode member variable after constructor is beeing called for possible errors
+           */
+    
+          vector<vectorType> (vector<vectorType>& other) {
+              this->clear (); // clear existing elements if needed
+              if (this->reserve (other.size ()) != OK) {
+
+                  #ifdef __VECTOR_H_DEBUG__
+                      Serial.printf ("Error %i: vector copy-constructor: out of memory\n", (int) lastErrorCode);
+                  #endif
+                  #ifdef __VECTOR_H_EXCEPTIONS__
+                      throw lastErrorCode;
+                  #endif                      
+
+                  return; // prevent resizing __elements__ for each element beeing pushed back
+              }
+
+              // copy other's elements - storage will not get resized meanwhile
+              for (auto e: other)
+                  this->push_back (e);
+                  
+              // alternativelly:
+              //   for (int i = 0; i < other.size (); i++)
+              //       this->push_back (other [i]);       
+          }
+
+
+          /*
+           *  Assignment operator of vector allows the following kinds of assignements of vectors: 
+           *  
+           *     vector<int> F;
+           *     F = { 1, 2, 3 }; or F = {};
+           *     
+           *  Without properly handling it, = operator would probably just copy one instance over another which would result in crash when instances will be distroyed.
+           */
+    
+          vector<vectorType>* operator = (vector<vectorType> other) {
+              this->clear (); // clear existing elements if needed
+              if (this->reserve (other.size ()) != OK) {
+
+                  #ifdef __VECTOR_H_DEBUG__
+                      Serial.printf ("Error %i: vector assignement: out of memory\n", (int) lastErrorCode);
+                  #endif
+                  #ifdef __VECTOR_H_EXCEPTIONS__
+                      throw lastErrorCode;
+                  #endif                      
+                     
+                  return this; // prevent resizing __elements__ for each element beeing pushed back
+              }
+              // copy other's elements - storege will not get resized meanwhile
+              for (auto e: other)
+                  this->push_back (e);
+                  
+              // alternativelly:
+              //   for (int i = 0; i < other.size (); i++)
+              //       this->push_back (other [i]);               
+              return this;
+          }
+
+    
+          /*
+           * == operator allows comparison of vectors, like:
+           * 
+           *  Serial.println (F == E ? "vectors are equal" : "vectors are different");
+           */
+    
+          bool operator == (vector& other) {
+            if (this->__size__ != other.size ()) return false;
+            int16_t e = this->__front__;
+            for (int16_t i = 0; i < this->__size__; i++) {
+              if (this->__elements__ [e] != other [i])
+                return false;
+              e = (e + 1) % this->__capacity__;
+            }
             return true;
-          } else {
-            return false;
           }
-        }
-        return true; // no change in capacity
-      }
-
-
-      // checks if vector is empty
-      bool empty () {
-        return __size__ == 0;
-      }
-
-
-      // clears all the elements from the vector
-      void clear () {
-        __reserved__ = 0;
-        if (__elements__ != NULL) __changeCapacity__ (0);
-      }
-
-
-      /*
-       *  [] operator enables elements of vector to be addressed by their positions (indexes) like:
-       *  
-       *    for (int i = 0; i < E.size (); i++)
-       *      Serial.printf ("E [%i] = %i\n", i, E [i]);    
-       *    
-       *    or
-       *    
-       *     E [0] = E [1];
-       *     
-       *  If the index is not a valid index, the result is unpredictable
-       */
-
-      vectorType &operator [] (int position) {
-      
-        #ifdef __VECTOR_H_EXCEPTIONS__
-          if (position < 0 || position >= __size__) throw out_of_range;
-        #endif
+    
         
-        return __elements__ [(__beginning__ + position) % __capacity__];
-      }
-
-
-      /*
-       *  Same as [] operator, so it is not really needed but added here because it is supported in standard C++ vectors
-       */      
-
-      vectorType &at (int position) {
-
-        #ifdef __VECTOR_H_EXCEPTIONS__
-          if (position < 0 || position >= __size__) throw out_of_range;
-        #endif
-
-        return __elements__ [(__beginning__ + position) % __capacity__];
-      }
-
-
-      /*
-       *  Copy-constructor of vector allows the following kinds of creation of vectors: 
-       *  
-       *     vector<int> F = E;
-       *     
-       *  Without properly handling it, = operator would probably just copy one instance over another which would result in crash when instances will be distroyed.
-       *  
-       *  Calling program should check size member function after constructor is beeing called for possible errors
-       */
-
-      vector<vectorType> (vector<vectorType>& other) {
-        // clear existing elements if needed
-        this->clear ();
-        if (!this->reserve (other.size ())) return; // prevent resizing __elements__ for each element beeing pushed back
-        // copy other's elements - storage will not get resized meanwhile
-        for (auto e: other)
-          this->push_back (e);
-
-        // or
-        // for (int i = 0; i < other.size (); i++)
-        //   this->push_back (other [i]);       
-      }
-
-
-      /*
-       *  Assignment operator of vector allows the following kinds of assignements of vectors: 
-       *  
-       *     vector<int> F;
-       *     F = { 1, 2, 3 }; or F = {};
-       *     
-       *  Without properly handling it, = operator would probably just copy one instance over another which would result in crash when instances will be distroyed.
-       */
-
-      vector<vectorType>* operator = (vector<vectorType> other) {
-        // clear existing elements if needed
-        this->clear ();
-        if (!this->reserve (other.size ())) return this; // prevent resizing __elements__ for each element beeing pushed back
-        // copy other's elements - storege will not get resized meanwhile
-        for (auto e: other)
-          this->push_back (e);
-
-        // or    
-        // for (int i = 0; i < other.size (); i++)
-        //   this->push_back (other [i]);               
-        return this;
-      }
-
-
-      /*
-       * == operator allows comparison of vectors, like:
-       * 
-       *  Serial.println (F == E ? "vectors are equal" : "vectors are different");
-       */
-
-      bool operator == (vector& other) {
-        if (this->__size__ != other.size ()) return false;
-        int e = this->__beginning__;
-        for (int i = 0; i < this->__size__; i++) {
-          if (this->__elements__ [e] != other [i])
-            return false;
-          e = (e + 1) % this->__capacity__;
-        }
-        return true;
-      }
-
-
-      /*
-       *  Adds element to the end of a vector, like:
-       *  
-       *    E.push_back (700);
-       *    
-       *  Returns true if succeeds and false in case of error:
-       *    - could not allocate enough memory for requested storage
-       */
-
-      bool push_back (vectorType element) {
-        // do we have to resize __elements__ first?
-        if (__size__ == __capacity__) 
-          if (!__changeCapacity__ (__capacity__ + __increment__)) {
-            return false;
+          /*
+           *  Adds element to the end of a vector, like:
+           *  
+           *    E.push_back (700);
+           *    
+           *  Returns OK if succeeds and errorCode in case of error:
+           *    - could not allocate enough memory for requested storage
+           */
+  
+          errorCode push_back (vectorType element) {
+              // do we have to resize __elements__ first?
+              if (__size__ == __capacity__) {
+                  errorCode e = __changeCapacity__ (__capacity__ + __increment__);
+                  if (e != OK) {
+                    
+                      #ifdef __VECTOR_H_DEBUG__
+                          Serial.printf ("Error %i: vector.push_back: calling __changeCapacity__\n", (int) e);
+                      #endif
+                      #ifdef __VECTOR_H_EXCEPTIONS__
+                          throw e;
+                      #endif                      
+                                            
+                      lastErrorCode = e;
+                      return e;
+                  }
+              }
+      
+              // add the new element at the end = (__front__ + __size__) % __capacity__, at this point we can be sure that there is enough __capacity__ of __elements__
+              __elements__ [(__front__ + __size__) % __capacity__] = element;
+              __size__ ++;
+              return OK;
           }
 
-        // add the new element at the end, at this point we can be sure that there is enough space in __elements__
-        __end__ = (__end__ + 1) % __capacity__; // __end__ + 1
-        __elements__ [__end__] = element;
-        __size__ ++;
-        if (__size__ == 1) __beginning__ = __end__;
-        return true;
-      }
+
+          /*
+           * push_front (unlike push_back) is not a standard C++ vector member function
+           */
+            
+          errorCode push_front (vectorType element) {
+              // do we have to resize __elements__ first?
+              if (__size__ == __capacity__) {
+                  errorCode e = __changeCapacity__ (__capacity__ + __increment__);
+                  if (e != OK) {
+                    
+                      #ifdef __VECTOR_H_DEBUG__
+                          Serial.printf ("Error %i: vector.push_front: calling __changeCapacity__\n", (int) e);
+                      #endif
+                      #ifdef __VECTOR_H_EXCEPTIONS__
+                          throw e;
+                      #endif                      
+                                            
+                      lastErrorCode = e;
+                      return e;
+                  }
+              }
+      
+              // add the new element at the beginning, at this point we can be sure that there is enough __capacity__ of __elements__
+              __front__ = (__front__ + __capacity__ - 1) % __capacity__; // __front__ - 1
+              __elements__ [__front__] = element;
+              __size__ ++;
+              return OK;
+          }
 
 
-      // this is not a standard C++ vector member function
-      bool push_front (vectorType element) {
-        // do we have to resize __elements__ first?
-        if (__size__ == __capacity__) 
-          if (!__changeCapacity__ (__capacity__ + __increment__))
-            return false;
-
-        // add the new element at the beginning, at this point we can be sure that there is enough space in __elements__
-        __beginning__ = (__beginning__ + __capacity__ - 1) % __capacity__; // __beginning__ - 1
-        __elements__ [__beginning__] = element;
-        __size__ ++;
-        if (__size__ == 1) __end__ = __beginning__;
-        return true;
-      }
-
-
-      /*
-       *  Deletes last element from the end of a vector, like:
-       *  
-       *    E.pop_back ();
-       *    
-       *  Returns true if succeeds and false in case of error:
-       *    - element does't exist
-       */
-
-      bool pop_back () {
-        if (__size__ == 0) {
-
-          #ifdef __VECTOR_H_EXCEPTIONS__
-            if (__size__ == 0) throw out_of_range;
-          #endif
-
-          return false;
-        }
+          /*
+           *  Deletes last element from the end of a vector, like:
+           *  
+           *    E.pop_back ();
+           *    
+           *  Returns OK if succeeds and errorCode in case of error:
+           *    - element does't exist
+           */
+    
+          errorCode pop_back () {
+              if (__size__ == 0) {
+                  lastErrorCode = OUT_OF_RANGE;
+  
+                  #ifdef __VECTOR_H_DEBUG__
+                      Serial.printf ("Error %i: vector.pop_back: vector is empty\n", (int) OUT_OF_RANGE);
+                  #endif
+                  #ifdef __VECTOR_H_EXCEPTIONS__
+                    if (__size__ == 0) throw OUT_OF_RANGE;
+                  #endif
         
-        // remove last element
-        __end__ = (__end__ + __capacity__ - 1) % __capacity__; // __end__ - 1
-        __size__ --;
+                  return OUT_OF_RANGE;
+              }
+              
+              // remove last element
+              __size__ --;
+      
+              // do we have to free the space occupied by deleted element?
+              if (__capacity__ > __size__ + __increment__ - 1) __changeCapacity__ (__size__); // doesn't matter if it does't succeed, the element is deleted anyway
+              return OK;
+          }
 
-        // do we have to free the space occupied by deleted element?
-        if (__capacity__ > __size__ + __increment__ - 1) 
-          if (__reserved__ == 0 || __size__ >= __reserved__)
-            __changeCapacity__ (__size__); // doesn't matter if it does't succeed, the elekent is deleted anyway
-        return true;
-      }
+
+          /*
+           * pop_front (unlike pop_back) is not a standard C++ vector member function
+           */
+      
+          errorCode pop_front () {
+              if (__size__ == 0) {
+      
+                  #ifdef __VECTOR_H_DEBUG__
+                      Serial.printf ("Error %i: vector.pop_front: vector is empty\n", (int) OUT_OF_RANGE);
+                  #endif
+                  #ifdef __VECTOR_H_EXCEPTIONS__
+                    if (__size__ == 0) throw OUT_OF_RANGE;
+                  #endif
+                          
+                  return OUT_OF_RANGE;
+              }
+              
+              // remove first element
+              __front__ = (__front__ + 1) % __capacity__; // __front__ + 1
+              __size__ --;
+      
+              // do we have to free the space occupied by deleted element?
+              if (__capacity__ > __size__ + __increment__ - 1) __changeCapacity__ (__size__);  // doesn't matter if it does't succeed, the elekent is deleted anyway
+              return OK;
+          }
+
+    
+          /*
+           *  Returns a position (index) of the first occurence of the element in the vector if it exists, -1 otherwise. Example:
+           *  
+           *  Serial.println (D.find (400));
+           *  Serial.println (D.find (500));
+           */
+    
+          int16_t find (vectorType element) {
+              int16_t e = __front__;
+              for (int16_t i = 0; i < __size__; i++) {
+                if (__elements__ [e] == element) return i;
+                e = (e + 1) % __capacity__;
+              }
+              
+              return -1;
+          }
 
 
-      // this is not a standard C++ vector member function
-      bool pop_front () {
-        if (__size__ == 0) {
+          /*
+           *  Erases the element occupying at the position from the vector
+           *  
+           *  Returns OK if succeeds and errorCode in case of error:
+           *    - element does't exist
+           */
+    
+          errorCode erase (int16_t position) {
+              // is position a valid index?
+              if (position < 0 || position >= __size__) {
+  
+                  #ifdef __VECTOR_H_DEBUG__
+                      Serial.printf ("Error %i: vector.erase: element %i doesn't exist\n", (int) OUT_OF_RANGE, position);
+                  #endif
+                  #ifdef __VECTOR_H_EXCEPTIONS__
+                    throw OUT_OF_RANGE;
+                  #endif
+                            
+                  return OUT_OF_RANGE;
+              }
+    
+              // try 2 faster options first
+              if (position == __size__ - 1)                         return pop_back ();
+              if (position == 0)                                    return pop_front (); 
+    
+              // do we have to free the space occupied by the element to be deleted? This is the slowest option
+              if (__capacity__ > __size__ - 1 + __increment__ - 1)  return __changeCapacity__ (__size__ - 1, position, -1);
+    
+              // we have to reposition the elements, weather from the __front__ or from the calculate back, whichever is faster
+              if (position < __size__ - position) {
+                  // move all elements form position to 1
+                  int16_t e1 = (__front__ + position) % __capacity__;
+                  for (int16_t i = position; i > 0; i --) {
+                      int16_t e2 = (e1 + __capacity__ - 1) % __capacity__; // e1 - 1
+                      __elements__ [e1] = __elements__ [e2];
+                      e1 = e2;
+                  }
+                  // delete the first element now
+                  return pop_front (); // tere is no reason why this wouldn't succeed now, so OK
+              } else {
+                  // move elements from __size__ - 1 to position
+                  int16_t e1 = position;
+                  for (int16_t i = position; i < __size__ - 1; i ++) {
+                      int16_t e2 = (e1 + 1) % __capacity__; // e2 = e1 + 1
+                      __elements__ [e1] = __elements__ [e2];
+                      e1 = e2;
+                  }
+                  // delete the last element now
+                  return pop_back (); // tere is no reason why this wouldn't succeed now, so OK
+              }
+          }
+
+    
+          /*
+           *  Inserts a new element at the position into the vector
+           *  
+           *  Returns true if succeeds and false in case of error:
+           *    - could not allocate enough memory for requested storage
+           */
+
+          errorCode insert (int16_t position, vectorType element) {
+              // is position a valid index?
+              if (position < 0 || position >= __size__) {
+  
+                  #ifdef __VECTOR_H_DEBUG__
+                      Serial.printf ("Error %i: vector.insert: position %i doesn't exist\n", (int) OUT_OF_RANGE, position);
+                  #endif                  
+                  #ifdef __VECTOR_H_EXCEPTIONS__
+                    throw OUT_OF_RANGE;
+                  #endif
+                            
+                  return OUT_OF_RANGE;
+              }
+    
+              // try 2 faster options first
+              if (position == __size__ - 1)           return push_back (element); 
+              if (position == 0)                      return push_front (element); 
+    
+              // do we have to resize the space occupied by existing the elements? This is the slowest option
+              if (__capacity__ < __size__ + 1) {
+                  errorCode e = __changeCapacity__ (__size__ + __increment__, -1, position);
+                  if (e != 0 /* vector::OK */)        return e;
+                  // else
+                  __elements__ [position] = element;  return OK; 
+              }
+    
+              // we have to reposition the elements, weather from the __front__ or from the calculated back, whichever is faster
+    
+              if (position < __size__ - position) {
+                  // move elements form 0 to position
+                  __front__ = (__front__ + __capacity__ - 1) % __capacity__; // __front__ - 1
+                  __size__ ++;
+                  int16_t e1 = __front__;
+                  for (int16_t i = 0; i <= position; i++) {
+                      int16_t e2 = (e1 + 1) % __capacity__; 
+                      __elements__ [e1] = __elements__ [e2];
+                      e1 = e2;
+                  }
+                  // insert the new element now
+                  __elements__ [position] = element;
+                  return OK;
+              } else {
+                  // move elements from __size__ - 1 to position
+                  int16_t back = (__front__ + __size__) % __capacity__; // calculated back + 1
+                  __size__ ++;
+                  int16_t e1 = back;
+                  for (int16_t i = __size__ - 1; i > position; i--) {
+                      int16_t e2 = (e1 + __capacity__ - 1) % __capacity__; // e2 = e1 - 1
+                      __elements__ [e1] = __elements__ [e2];
+                      e1 = e2;
+                  }
+                  // insert the new element now
+                  __elements__ [position] = element;        
+                  return OK;
+              }
+          }
+    
           
-          #ifdef __VECTOR_H_EXCEPTIONS__
-            if (__size__ == 0) throw out_of_range;
-          #endif
-                    
-          return false;
-        }
-        
-        // remove first element
-        __beginning__ = (__beginning__ + 1) % __capacity__; // __beginning__ + 1
-        __size__ --;
-
-        // do we have to free the space occupied by deleted element?
-        if (__capacity__ > __size__ + __increment__ - 1) 
-          if (__reserved__ == 0 || __size__ >= __reserved__)
-            __changeCapacity__ (__size__);  // doesn't matter if it does't succeed, the elekent is deleted anyway
-        return true;
-      }
-
-
-      /*
-       *  Returns a position (index) of the first occurence of the element in the vector if it exists, -1 otherwise. Example:
-       *  
-       *  Serial.println (D.find (400));
-       *  Serial.println (D.find (500));
-       */
-
-      int find (vectorType element) {
-        int e = __beginning__;
-        for (int i = 0; i < __size__; i++) {
-          if (__elements__ [e] == element) return i;
-          e = (e + 1) % __capacity__;
-        }
-        return -1;
-      }
-
-
-      /*
-       *  Erases the element occupying at the position from the vector
-       *  
-       *  Returns true if succeeds and false in case of error:
-       *    - element does't exist
-       */
-
-      bool erase (int position) {
-        // is position a valid index?
-        if (position < 0 || position >= __size__) {
+          /*
+           *  Iterator is needed in order for standard C++ for each loop to work. 
+           *  A good source for iterators is: https://www.internalpointers.com/post/writing-custom-iterators-modern-cpp
+           *  
+           *  Example:
+           *  
+           *    for (auto element: A) 
+           *      Serial.println (element);
+           */
+    
+          class Iterator {
+            public:
+                        
+              // constructor
+              Iterator (vector* vect) { __vector__ = vect; }
+              
+              // * operator
+              vectorType& operator *() const { return __vector__->at (__position__); }
           
-          #ifdef __VECTOR_H_EXCEPTIONS__
-            throw out_of_range;
-          #endif
-                    
-          return false;
-        }
-
-        // try 2 faster options first
-        if (position == __size__ - 1)                    return pop_back ();
-        if (position == 0)                               return pop_front (); 
-
-        // do we have to free the space occupied by the element to be deleted? This is the slowest option
-        if (__capacity__ > __size__ - 1 + __increment__ - 1)    return __changeCapacity__ (__size__ - 1, position, -1);
-
-        // we have to reposition the elements, weather from the __beginning__ or from the __end__, which is faster
-        if (position < __size__ - position) {
-          // move elements form position to 1
-          int e1 = (__beginning__ + position) % __capacity__;
-          for (int i = position; i > 0; i --) {
-            int e2 = (e1 + __capacity__ - 1) % __capacity__; // e1 - 1
-            __elements__ [e1] = __elements__ [e2];
-            e1 = e2;
-          }
-          // delete the first element now
-          pop_front (); // tere is no reason why this wouldn't succeed now
-          return true;
-        } else {
-          // move elements from __size__ - 1 to position
-          int e1 = position;
-          for (int i = position; i < __size__ - 1; i ++) {
-            int e2 = (e1 + 1) % __capacity__; // e2 = e1 + 1
-            __elements__ [e1] = __elements__ [e2];
-            e1 = e2;
-          }
-          // delete the last element now
-          pop_back (); // tere is no reason why this wouldn't succeed now
-          return true;          
-        }
-      }
+              // ++ (prefix) increment
+              Iterator& operator ++ () { __position__ ++; return *this; }
+    
+              // C++ will stop iterating when != operator returns false, this is when __position__ counts to vector.size ()
+              friend bool operator != (const Iterator& a, const Iterator& b) { return a.__position__ != a.__vector__->size (); }
+       
+          private:
+    
+              vector* __vector__;
+              int16_t __position__ = 0;
+              
+          };      
+    
+          Iterator begin () { return Iterator (this); }  
+          Iterator end () { return Iterator (this); }
 
 
-      /*
-       *  Inserts a new element at the position into the vector
-       *  
-       *  Returns true if succeeds and false in case of error:
-       *    - could not allocate enough memory for requested storage
-       */
-
-      bool insert (int position, vectorType element) {
-        // is position a valid index?
-        if (position < 0 || position >= __size__) {
-          
-          #ifdef __VECTOR_H_EXCEPTIONS__
-            throw out_of_range;
-          #endif
-                    
-          return false;
-        }
-
-        // try 2 faster options first
-        if (position == __size__ - 1)                                        return push_back (element); 
-        if (position == 0)                                                   return push_front (element); 
-
-        // do we have to resize the space occupied by existing the elements? This is the slowest option
-        if (__capacity__ < __size__ + 1) {
-          if (!__changeCapacity__ (__size__ + __increment__, -1, position))  return false;
-          __elements__ [position] = element;                                 return true; 
-        }
-
-        // we have to reposition the elements, weather from the __beginning__ or from the __end__, which is faster
-
-        if (position < __size__ - position) {
-          // move elements form 0 to position
-          __beginning__ = (__beginning__ + __capacity__ - 1) % __capacity__; // __beginning__ - 1
-          __size__ ++;
-          int e1 = __beginning__;
-          for (int i = 0; i <= position; i++) {
-            int e2 = (e1 + 1) % __capacity__; 
-            __elements__ [e1] = __elements__ [e2];
-            e1 = e2;
-          }
-          // insert new element now
-          __elements__ [position] = element;
-          return true;
-        } else {
-          // move elements from __size__ - 1 to position
-          __end__ = (__end__ + 1) % __capacity__; // __end__ + 1
-          __size__ ++;
-          int e1 = __end__;
-          for (int i = __size__ - 1; i > position; i--) {
-            int e2 = (e1 + __capacity__ - 1) % __capacity__; // e2 = e1 - 1
-            __elements__ [e1] = __elements__ [e2];
-            e1 = e2;
-          }
-          // insert the new element now
-          __elements__ [position] = element;        
-          return true;
-        }
-      }
+          #ifdef __VECTOR_H_DEBUG__
+              // displays vector's internal structure
+              void debug () {
+                  Serial.printf ("\n\n"
+                                 "__elements__  = %p\n"
+                                 "__capacity__  = %i\n"
+                                 "__increment__ = %i\n"
+                                 "__size__      = %i\n"
+                                 "__front__     = %i\n\n",
+                                 __elements__, __capacity__, __increment__, __size__, __front__);
+                  for (int16_t i = 0; i < __capacity__; i++) {
+                      bool used = __front__ + __size__ <= __capacity__ 
+                                ? i >= __front__ && i < __front__ + __size__
+                                : i >= __front__ || i < (__front__ + __size__) % __capacity__;
+                      
+                      Serial.printf ("   vector [%i]", i);  if (used) { Serial.print (" = "); Serial.print (__elements__ [i]); }
+                                                            else        Serial.print (" --- not used ---");
+                      if (i == __front__ && __size__ > 0)                 Serial.printf (" <- __front__");
+                      if (i == (__front__ + __size__ - 1) % __capacity__) Serial.printf (" <- (calculated back)");
+                      Serial.printf ("\n");
+                  }
+                  Serial.printf ("\n");
+              }
+            #endif
 
 
-      /*
-       *  Iterator is needed in order for standard C++ for each loop to work. 
-       *  A good source for iterators is: https://www.internalpointers.com/post/writing-custom-iterators-modern-cpp
-       *  
-       *  Example:
-       *  
-       *    for (auto element: A) 
-       *      Serial.println (element);
-       */
-
-      class Iterator {
-        public:
-          // constructor
-          Iterator (vector *vect, int position) {
-            __vector__ = vect;
-            __position__ = position;
-          }
-          
-          // * operator
-          vectorType& operator *() const { 
-            return *(__vector__->__elements__ + __position__); 
-          }
-      
-          // ++ (prefix) increment
-          Iterator& operator ++ () { 
-            // this is a little tricky - we should allow iterator to go past the last element in a vector
-            if (__vector__->__end__ >= __vector__->__beginning__) ++ __position__;
-            else                                                  __position__ = (__position__ + 1) % __vector__->__capacity__; 
-            return *this; 
-          }  
-      
-          friend bool operator != (const Iterator& a, const Iterator& b) { return a.__position__ != b.__position__; };     
-      
-      private:
-      
-          vector *__vector__;
-          int __position__;
-      };      
-
-      Iterator begin () { return Iterator (this, __beginning__); }
-      Iterator end ()   { return Iterator (this, __end__ + 1); } // past the last element
-
-
-      // displays vector's internal structure
-      /*      
-      void debug () {
-        Serial.printf ("\n\n"
-                       "__elements__  = %p\n"
-                       "__capacity__  = %i\n"
-                       "__increment__ = %i\n"
-                       "__size__      = %i\n"
-                       "__beginning__ = %i\n"
-                       "__end__       = %i\n\n",
-                       __elements__, __capacity__, __increment__, __size__, __beginning__, __end__);
-        for (int i = 0; i < __capacity__; i++) {
-          Serial.printf ("   %i. [", i); Serial.print (__elements__ [i]); Serial.printf ("] ");
-          if (i == __beginning__) Serial.printf (" <-__beginning__ (front)");
-          if (i == __end__) Serial.printf (" <-__end__ (back)");
-          Serial.printf ("\n");
-        }
-        Serial.printf ("\n");
-      }
-      */
-
-      
     private:
 
-      friend Iterator;
+          vectorType *__elements__ = NULL;  // initially the vector has no elements, __elements__ buffer is empty
+          int16_t __capacity__ = 0;         // initial number of elements (or not occupied slots) in __elements__
+          int16_t __increment__ = 1;        // by default, increment elements buffer for one element when needed
+          int16_t __size__ = 0;             // initially there are not elements in __elements__
+          int16_t __front__ = 0;            // points to the first element in __elements__, which do not exist yet at instance creation time
 
-      vectorType *__elements__ = NULL;  // initially the vector has no elements, __elements__ buffer is empty
-      int __capacity__ = 0;             // the number of positions (occupied by elements and free ones) in __elements__
-      int __increment__ = 1;            // by default, increment elements buffer for one element when needed
-      int __reserved__ = 0;             // reserved capacity (if reserve member function is called)
-      int __size__ = 0;                 // initially there are not elements in __elements__
-      int __beginning__ = 0;            // points to the first element in __elements__
-      int __end__ = -1;                 // points to the last element in __elements__
+  
+          /*
+           *  Resizes __elements__ to new capacity with the option of deleting and adding an element meanwhile
+           *  
+           *  Returns true if succeeds and false in case of error:
+           *    - could not allocate enough memory for requested storage
+           */
 
-
-      /*
-       *  Resizes __elements__ to new capacity with the option of deleting and adding an element meanwhile
-       *  
-       *  Returns true if succeeds and false in case of error:
-       *    - could not allocate enough memory for requested storage
-       */
-
-      bool __changeCapacity__ (int newCapacity, int deleteElementAtPosition = -1, int leaveFreeSlotAtPosition = -1) {
-        if (newCapacity == 0) {
-          // delete old buffer
-          if (__elements__ != NULL) delete [] __elements__;
-          
-          // update internal variables
-          __capacity__ = 0;
-          __elements__ = NULL;
-          __size__ = 0;
-          __beginning__ = 0;
-          __end__ = -1;
-          return true;
-        } 
-        // else
-        
-        #ifdef __VECTOR_H_EXCEPTIONS__
-          vectorType *newElements = new vectorType [newCapacity]; // allocate space for newCapacity elements
-        #else
-          vectorType *newElements = new (std::nothrow) vectorType [newCapacity]; // allocate space for newCapacity elements
-        #endif
-        
-        if (newElements == NULL) return false;
-        
-        // copy existing elements to the new buffer
-        if (deleteElementAtPosition >= 0) __size__ --;      // one element will be deleted
-        if (leaveFreeSlotAtPosition >= 0) __size__ ++;      // a slot for 1 element will be added
-        if (__size__ > newCapacity) __size__ = newCapacity; // shouldn't really happen
-        
-        int e = __beginning__;
-        for (int i = 0; i < __size__; i++) {
-
-          // is i-th element supposed to be deleted? Don't copy it then ...
-          if (i == deleteElementAtPosition) e = (e + 1) % __capacity__; // e ++
-          
-          // do we have to leave a free slot for a new element at i-th place? Continue with the next index ...
-          if (i == leaveFreeSlotAtPosition) continue;
-          
-          newElements [i] = __elements__ [e];
-          e = (e + 1) % __capacity__;
-        }
-        
-        // delete the old elements' buffer
-        if (__elements__ != NULL) delete [] __elements__;
-        
-        // update internal variables
-        __capacity__ = newCapacity;
-        __elements__ = newElements;
-        __beginning__ = 0;
-        __end__ = __size__ - 1;
-        return true;
-      }
+          errorCode __changeCapacity__ (int newCapacity, int deleteElementAtPosition = -1, int leaveFreeSlotAtPosition = -1) {
+              if (newCapacity == 0) {
+                  // delete old buffer
+                  if (__elements__ != NULL) delete [] __elements__;
+                  
+                  // update internal variables
+                  __capacity__ = 0;
+                  __elements__ = NULL;
+                  __size__ = 0;
+                  __front__ = 0;
+                  return OK;
+              } 
+              // else
+              
+              #ifdef __VECTOR_H_EXCEPTIONS__
+                  vectorType *newElements = new vectorType [newCapacity]; // allocate space for newCapacity elements
+              #else
+                  vectorType *newElements = new (std::nothrow) vectorType [newCapacity]; // allocate space for newCapacity elements
+              #endif
+              
+              if (newElements == NULL) {
+                
+                  #ifdef __VECTOR_H_DEBUG__
+                      Serial.printf ("Error %i: vector.__changeCapacity__: couldn't resize internal storage for %i elements\n", (int) BAD_ALLOC, newCapacity);
+                  #endif
+                  
+                  return BAD_ALLOC;
+              }
+              
+              // copy existing elements to the new buffer
+              if (deleteElementAtPosition >= 0) __size__ --;      // one element will be deleted
+              if (leaveFreeSlotAtPosition >= 0) __size__ ++;      // a slot for 1 element will be added
+              if (__size__ > newCapacity) __size__ = newCapacity; // shouldn't really happen
+              
+              int e = __front__;
+              for (int i = 0; i < __size__; i++) {
+                  // is i-th element supposed to be deleted? Don't copy it then ...
+                  if (i == deleteElementAtPosition) e = (e + 1) % __capacity__; // e ++
+                  
+                  // do we have to leave a free slot for a new element at i-th place? Continue with the next index ...
+                  if (i == leaveFreeSlotAtPosition) continue;
+                  
+                  newElements [i] = __elements__ [e];
+                  e = (e + 1) % __capacity__;
+              }
+              
+              // delete the old elements' buffer
+              if (__elements__ != NULL) delete [] __elements__;
+              
+              // update internal variables
+              __capacity__ = newCapacity;
+              __elements__ = newElements;
+              __front__ = 0;  // the first element is now aligned with 0
+              return OK;
+          }
 
   };
 
