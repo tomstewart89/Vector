@@ -4,8 +4,8 @@
 vector.h is based on [Tom Stewart's work](https://github.com/tomstewart89/Vector) with some differences:
 
 
- - syntax is closer to standard C++ vectors
- - error handling added
+ - syntax is closer to standard C++ vectors,
+ - error handling added,
  - internal storage structure is different and also the logic for handling capacity.
 
 
@@ -29,9 +29,9 @@ Checking error of multiple operations:
 
 ```C++
     vector<int> v2;
-    for (int i = 1000; i < 1100; i++)
+    for (int i = 1; i <= 100; i++)
         v2.push_back (i);
-    if (v2.lastErrorCode == vector<int>::OK)
+    if (v2.lastErrorCode == v2.OK)
         Serial.println ("100 push_backs succeded");
     else {
         Serial.println ("100 push_backs error " + String (v2.lastErrorCode));

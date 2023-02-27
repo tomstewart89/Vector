@@ -53,7 +53,7 @@ void setup () {
     // or checking errors of multiple operations:
     for (int i = 1000; i < 1100; i++)
         v3.push_back (i);
-    if (v3.lastErrorCode == vector<int>::OK)
+    if (v3.lastErrorCode == v3.OK)
         Serial.println ("100 push_backs succeeded");
     else {
         Serial.println ("100 push_backs error " + String (v3.lastErrorCode));
