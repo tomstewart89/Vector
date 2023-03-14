@@ -4,9 +4,10 @@
 vector.h is based on [Tom Stewart's work](https://github.com/tomstewart89/Vector) with some differences:
 
 
- - syntax is closer to standard C++ vectors,
- - error handling added,
- - internal storage structure is different and also the logic for handling capacity.
+ - Syntax is closer to standard C++ vectors,
+ - Error handling added,
+ - Internal storage structure is different and also the logic for handling capacity,
+ - Supports also complex data types such as Strings and other kinds of objects.
 
 
 I have tried supporting vectors similar to STL C++ vectors but not all vector member functions are supported (yet). 
