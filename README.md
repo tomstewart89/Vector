@@ -40,7 +40,7 @@ Errors can be checked for each individual function call ...
     }
 ```
 
-All possible Arduino String errors need to be handled within the code. There are more things that can go wrong when dealing with Stings than when dealing with integers, for example. Consider the following two vector.find cases for example. In the integer case find can only return -1 (NOT_FOUND) or a valid index of the element being found, whereas in the String case, it is also possible that the controller can't even construct an argument String that gets passed to find function due to the lack of memory. FInd function can't even start searching. After returning we can not be sure if the element exists in the vector or not. 
+All possible Arduino String errors need to be handled within the code. There are more things that can go wrong when dealing with Stings than when dealing with integers, for example. Consider the following two vector.find cases. In the integer case find can only return -1 (NOT_FOUND) or a valid index of the element being found, whereas in the String case, it is also possible that the controller can't even construct an argument String that gets passed to find function due to the lack of memory. Find function can't even start searching. After returning we can not be sure if the element exists in the vector or not. 
 
 ```C++
     vector<int> vi = { 1, 2, 3 };
