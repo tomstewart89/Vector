@@ -2,11 +2,13 @@
 
 #include "vector.h"
 
+
 void setup () {
     Serial.begin (115200);
 
     // constructor of vector from brace enclosed initializer list
     vector<int> v1 = { 400, 300, 600, 500 };
+    vector<String> vs = { "one", "two", "tree" };
 
     // copy-constructor
     vector<int> v2 = v1;
@@ -59,6 +61,32 @@ void setup () {
         Serial.println ("100 push_backs error " + String (v3.lastErrorCode));
         v3.clearLastErrorCode (); // clear lastErrorCode before next operations
     }
+
+    // possible problems of vector of complex data types like Strings
+    vector<int> vi = { 1, 2, 3 };
+    if (vi.lastErrorCode != vi.OK) {
+        Serial.printf ("failed to initialize the vector\n"); // What can go wrong? Controller may not have enough free memory to put all the elements into the vector.
+    } else {
+        int f = vi.find (2);
+        if (f < 0) Serial.printf ("element not found\n"); // Well, the element 2 will in this case always be found at position 1, since vector initialization succeeded.
+        else Serial.printf ("element found at position %i\n", f);
+    }
+
+    vector<String> vstring = { "one", "two", "tree" };
+    if (vstring.lastErrorCode != vstring.OK) {
+        Serial.printf ("failed to initialize the vector\n"); // What can go wrong? Controller may not have enough free memory to put all the elements into the vector.
+    } else {
+        int f = vstring.find ("two");
+        switch (f) {
+          case vstring.NOT_FOUND:   Serial.printf ("element not found\n"); // The element "two" should be found at possition 1 if there is no other error
+                                    break;
+          case vstring.BAD_ALLOC:   Serial.printf ("find failed, that doesn't mean that the element is not there\n"); // Creation of find parameter failed due to lack of memory so find couldn't even start searching
+                                    break;
+          default:                  Serial.printf ("element found at position %i\n", f);
+                                    break;
+        }
+    }
+
 }
 
 void loop () {
