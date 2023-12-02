@@ -5,6 +5,7 @@ vector.h is based on [Tom Stewart's work](https://github.com/tomstewart89/Vector
 
 
  - Syntax is closer to standard C++ vectors,
+ - Sorting is added,
  - Error handling added,
  - Internal storage structure is different and also the logic for handling capacity,
  - Supports also Arduino Strings.
