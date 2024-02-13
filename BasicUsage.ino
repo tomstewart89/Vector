@@ -1,6 +1,6 @@
 #include <WiFi.h>
 
-#include "vector.h"
+#include "vector.hpp"
 
 
 void setup () {
@@ -46,32 +46,38 @@ void setup () {
     for (auto e: v3)
         Serial.println (e);
 
-    // checking error of each function call:
-    vector<int>::errorCode e = v3.push_back (900);
-    if (e == vector<int>::OK)
-        Serial.println ("push_back succeeded");
+    // sort vector elements:
+    v3.sort ();
+    Serial.println ("--- sorted v3 = ---");
+    for (auto e: v3)
+        Serial.println (e);
+
+    // checking error for each function call:
+    int e = v3.push_back (900);
+    if (e)
+        Serial.printf ("push_back error: %s\n", v3.errorCodeText (e));
     else
-        Serial.println ("push_back error " + String (e));
+        Serial.println ("push_back succeeded");
+        
     // or checking errors of multiple operations:
     for (int i = 1000; i < 1100; i++)
         v3.push_back (i);
-    if (v3.lastErrorCode == v3.OK)
-        Serial.println ("100 push_backs succeeded");
-    else {
-        Serial.println ("100 push_backs error " + String (v3.lastErrorCode));
+    if (v3.lastErrorCode) {
+        Serial.printf ("100 push_backs error: %s\n",  v3.errorCodeText (v3.lastErrorCode));
         v3.clearLastErrorCode (); // clear lastErrorCode before next operations
-    }
+    } else
+        Serial.println ("100 push_backs succeeded");
 
-    // possible problems of vector of complex data types like Strings
+    // handle possible problems of vector of complex data types like Strings
     vector<int> vi = { 1, 2, 3 };
-    if (vi.lastErrorCode != vi.OK) {
+    if (vi.lastErrorCode) {
         Serial.printf ("failed to initialize the vector\n"); // What can go wrong? Controller may not have enough free memory to put all the elements into the vector.
     } else {
         int f = vi.find (2);
         if (f < 0) Serial.printf ("element not found\n"); // Well, the element 2 will in this case always be found at position 1, since vector initialization succeeded.
         else Serial.printf ("element found at position %i\n", f);
     }
-
+        
     vector<String> vstring = { "one", "two", "tree" };
     if (vstring.lastErrorCode != vstring.OK) {
         Serial.printf ("failed to initialize the vector\n"); // What can go wrong? Controller may not have enough free memory to put all the elements into the vector.
@@ -87,6 +93,20 @@ void setup () {
         }
     }
 
+    // sort vector of Strings
+    vstring.sort ();
+    Serial.println ("--- sorted vstring = ---");
+    for (auto e: vstring)
+        Serial.println (e);
+
+    // find min (max) element of the vector
+    Serial.println ("--- min_element, max_element ---");
+    auto minElement = min_element (v3);
+    if (minElement) // check if min element is found (if v3 is not empty)
+        Serial.printf ("min element of v3 = %i\n", *minElement);
+    auto maxElement = max_element (v3);
+    if (maxElement) // check if max element is found (if v3 is not empty)
+        Serial.printf ("max element of v3 = %i\n", *maxElement);
 }
 
 void loop () {

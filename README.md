@@ -1,11 +1,12 @@
 # C++ vectors for Arduino (ESP boards)
 
 
-vector.h is based on [Tom Stewart's work](https://github.com/tomstewart89/Vector) with some differences:
+vector.hpp is based on [Tom Stewart's work](https://github.com/tomstewart89/Vector) with major differences:
 
 
  - Syntax is closer to standard C++ vectors,
  - Sorting is added,
+ - min_element and max_element functions are added
  - Error handling added,
  - Internal storage structure is different and also the logic for handling capacity,
  - Supports also Arduino Strings.
